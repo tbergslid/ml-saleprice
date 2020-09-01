@@ -6,9 +6,8 @@ from sklearn import linear_model
 from sklearn.metrics import r2_score
 #from sklearn.feature_extraction import FeatureHasher
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder, MinMaxScaler
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, RandomizedSearchCV
 from sklearn.tree import export_graphviz
 from sklearn import metrics
 import pydot
@@ -36,7 +35,8 @@ def main():
 #          'Enclosure', 'Hydraulics', 'Track_Type']] = \
 #        data[['fiModelDesc', 'fiProductClassDesc', 'state', 'ProductGroup',
 #              'Enclosure', 'Hydraulics', 'Track_Type']].apply(le.fit_transform)
-#    data[['UsageBand']] = data[['UsageBand']].apply(le.fit_transform)
+    #data[['Forks']] = data[['Forks']].apply(le.fit_transform)
+    #data[['Coupler']] = data[['Coupler']].apply(le.fit_transform)
 
     # Extract only the years from YearMade and saledate.
     #data['modelYear'] = pd.DatetimeIndex(data['YearMade']).year
@@ -45,10 +45,10 @@ def main():
     # Remove features that have been found to not contribute significantly to the model,
     # or that are redundant due to other features.
     data = data.drop(['Track_Type', 'Hydraulics', 'auctioneerID', 'state', 'MachineID'], axis=1)
-    data = data.drop(['ageAtSaletime', 'ageAtSaletimeInMonths', 'ageAtSaletimeInYears'], axis=1)
     data = data.drop(['MachineHoursCurrentMeter', 'UsageBand'], axis=1)
     #data = data.drop(['YearMade', 'saledate'], axis=1)
     #data = data.drop(['YearMade', 'saledate', 'ageAtSaletime', 'ageAtSaletimeInMonths'], axis=1)
+    data = data.drop(['ageAtSaletime', 'ageAtSaletimeInMonths', 'ageAtSaletimeInYears'], axis=1)
     data.info()
     print(data.head(10))
 
@@ -57,6 +57,7 @@ def main():
     X = data.drop(['SalePrice'], axis=1)
     X.info()
 
+    #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.9, random_state=12345)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=12345)
     print(X_train.shape, y_train.shape)
     print(X_test.shape, y_test.shape)
@@ -69,9 +70,35 @@ def main():
     X_test = mms.fit_transform(X_test)
     print(X_train)
 
-    reg = RandomForestRegressor(n_estimators=200, random_state=0)
-    reg.fit(X_train, y_train)
-    y_pred = reg.predict(X_test)
+    # Hyperparameter optimization.
+    n_estimators = [5, 30, 50, 100, 200, 400]
+    max_features = ['auto', 'sqrt']
+    #max_depth = ['None']
+    min_samples_split = [2, 5, 10]
+    min_samples_leaf = [1, 2, 4]
+    bootstrap = ['True', 'False']
+    random_grid = {'n_estimators': n_estimators,
+                   'max_features': max_features,
+                   'min_samples_split': min_samples_split,
+                   'min_samples_leaf': min_samples_leaf,
+                   'bootstrap': bootstrap
+                   }
+
+    #reg = RandomForestRegressor(n_estimators=200, verbose=1, random_state=0, n_jobs=-1)
+    #reg = RandomForestRegressor()
+
+    reg_random = RandomizedSearchCV(estimator=RandomForestRegressor(), param_distributions=random_grid, n_iter=100, cv=3,
+                                    verbose=2, random_state=0, n_jobs=-1)
+    reg_random.fit(X_train, y_train)
+    print(reg_random.best_params_)
+
+    # Create estimator using the best parameters.
+    #reg = RandomForestRegressor(**reg_random.best_params_)
+    #print(reg.get_params())
+
+    #reg.fit(X_train, y_train)
+    #y_pred = reg.predict(X_test)
+    y_pred = reg_random.predict(X_test)
 
     print('Mean Absolute Error:', round(metrics.mean_absolute_error(y_test, y_pred), 2))
     print('Mean Squared Error:', round(metrics.mean_squared_error(y_test, y_pred), 2))
@@ -92,14 +119,38 @@ def main():
 #    (graph, ) = pydot.graph_from_dot_file('small_tree.dot')
 #    graph.write_png('small_tree.png')
 
-    importances = list(reg.feature_importances_)
+    #importances = list(reg.feature_importances_)
+    importances = list(reg_random.best_estimator_.feature_importances_)
     feature_importances = [(feature, round(importance, 2)) for feature, importance in zip(feature_list, importances)]
     feature_importances = sorted(feature_importances, key=lambda x: x[1], reverse=True)
 
     [print('Feature: {:20} Importance: {}'.format(*pair)) for pair in feature_importances];
 
     df_pred = pd.DataFrame({'Actual': y_test, 'Predicted': y_pred})
-    print(df_pred.head(25))
+    #print(df_pred.head(25)['Actual'].tolist())
+    #print(df_pred.index[:25].tolist())
+
+    # Plot an overlapping bar chart of actual vs predicted values
+    # to get a visual impression of the prediction accuracy.
+    n_points = 20000
+    #plt.bar(np.arange(n_points), df_pred.head(n_points)['Actual'].tolist(), color='b', width=0.8, label='Actual')
+    #plt.bar(np.arange(n_points), df_pred.head(n_points)['Predicted'].tolist(), color='r', width=0.6, label='Predicted')
+    #plt.scatter(np.arange(n_points), df_pred.head(n_points)['Actual'].tolist(), color='b', label='Actual')
+    #plt.scatter(np.arange(n_points), df_pred.head(n_points)['Predicted'].tolist(), color='r', label='Predicted')
+    #plt.scatter(df_pred.head(n_points)['Actual'], df_pred.head(n_points)['Predicted'].tolist(),
+    #            color='black', marker='x')
+    plt.hexbin(df_pred['Actual'], df_pred['Predicted'], gridsize=100, bins='log', cmap=plt.cm.Greens)
+    plt.plot(df_pred['Actual'], df_pred['Actual'], color='red')
+    plt.colorbar(label='log10(N)')
+    plt.xlabel('Actual')
+    plt.ylabel('Predicted')
+    plt.title('Actual vs Predicted values')
+    plt.grid()
+    plt.axis([df_pred['Actual'].min(), df_pred['Actual'].max(), df_pred['Actual'].min(), df_pred['Actual'].max()])
+    #plt.bar(df_pred.index.tolist())
+    #plt.legend()
+    #plt.tight_layout()
+    plt.show()
 
 #    plt.style.use('fivethirtyeight')
 #    x_values = list(range(len(importances)))

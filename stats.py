@@ -15,8 +15,10 @@ def main():
     #data.info()
 
     # Find number of unique entries per attribute.
+    attrib_uniques = pd.DataFrame(columns=['nuniques'], index=list(data))
+    #attrib_uniques.set_index(list(data))
     for column in data:
-        print(column, data[column].nunique())
+        attrib_uniques.loc[column] = data[column].nunique()
 
     # Find percentage of null values per attribute.
     print('Finding percentage of missing values for each column:')
@@ -25,7 +27,20 @@ def main():
     null_percent = round(null_values['null']/len(data)*100, 3)
     null_values['percent'] = null_percent
     null_values = null_values.sort_values('percent', ascending=False)
-    print(null_values)
+    #print(null_values)
+
+    # Sort the list of nuniques according to the percentage of null values
+    attrib_uniques = attrib_uniques.reindex(null_values.index)
+    #print(attrib_uniques)
+    # We see that the attributes with most missing values have very few unique values.
+
+    # 21 of the features have more than 80% of the values missing. Let us look closer at those.
+    # Examine the data for attributes with lots of missing values.
+    #print('Unique entries per attribute:')
+    #for attrib in null_values.index[30:]:
+    #    print(attrib + ':')
+    #    print(data[attrib].value_counts())
+
 
     # Compare unique fiModelDesc with unique fiBaseModel. Maybe using
     # fiBaseModel as a feature provides enough detail.
@@ -39,29 +54,40 @@ def main():
     #    print(model, data[data.fiModelDesc == model].SalePrice.mean())
 
     data = data.drop(columns=['SalesID'])
-    data = data.drop(columns=['datasource', 'fiBaseModel', 'fiSecondaryDesc', 'fiModelSeries',
-                              'fiModelDescriptor', 'ProductSize', 'ProductGroupDesc', 'Drive_System', 'Forks',
+    data = data.drop(columns=['Forks'])
+    data = data.drop(columns=['datasource'])
+    data = data.drop(columns=['Coupler'])
+    data = data.drop(columns=['fiBaseModel', 'fiSecondaryDesc', 'fiModelSeries',
+                              'fiModelDescriptor', 'ProductSize', 'ProductGroupDesc', 'Drive_System',
                               'Pad_Type', 'Ride_Control', 'Stick', 'Transmission', 'Turbocharged', 'Blade_Extension',
                               'Blade_Width', 'Enclosure_Type', 'Engine_Horsepower', 'Pushblock', 'Ripper',
-                              'Scarifier', 'Tip_Control', 'Tire_Size', 'Coupler', 'Coupler_System', 'Grouser_Tracks',
+                              'Scarifier', 'Tip_Control', 'Tire_Size', 'Coupler_System', 'Grouser_Tracks',
                               'Hydraulics_Flow', 'Undercarriage_Pad_Width', 'Stick_Length', 'Thumb',
                               'Pattern_Changer', 'Grouser_Type', 'Backhoe_Mounting', 'Blade_Type', 'Travel_Controls',
                               'Differential_Type', 'Steering_Controls'], axis=1)
 
     # # # # ##################### TEMPORARY
     #data = data.drop(columns=['UsageBand', 'MachineHoursCurrentMeter'])
-    print(data.loc[(data['UsageBand'] == 'Low')]['MachineHoursCurrentMeter'].mean())
-    print(data.loc[(data['UsageBand'] == 'Medium')]['MachineHoursCurrentMeter'].mean())
-    print(data.loc[(data['UsageBand'] == 'High')]['MachineHoursCurrentMeter'].mean())
+    print(data.groupby('UsageBand')['MachineHoursCurrentMeter'].mean())
+
+    #data['Forks'].fillna(value='None or Unspecified', inplace=True)
+    #data['Coupler'].fillna(value='None or Unspecified', inplace=True)
+
     # # # # ##################### TEMPORARY
 
     #data.info()
 
     #print(len(data))
     #antiqueData = data[(data.YearMade > 1900) & (data.YearMade < 1945)]
-    # Drop "antique models" which may skew the price higher as collectibles,
-    # and models where the YearMade does not make sense.
-    data = data[(data.YearMade != 1000) & (data.YearMade >= 1945)]
+    # Drop "antique models" which may skew the price higher as collectibles.
+    # This statement also drops rows where the YearMade does not make sense (is 1000).
+    #data.info()
+    data = data[(data.YearMade >= 1960)]
+    #data = data[(data.YearMade >= 1960) | (data.YearMade == 1000)]
+    # We remove all machines made before 1945, so giving the invalid year machines the YearMade of 1940
+    # instead should not collide with any other machines. 1000 doesn't work in the datetime methods.
+    #data['YearMade'].replace(1000, 1940, inplace=True)
+    #data.info()
     #print(len(data))
     #print(len(antiqueData))
     #print(antiqueData)
@@ -73,7 +99,7 @@ def main():
     null_percent = round(null_values['null']/len(data)*100, 3)
     null_values['percent'] = null_percent
     null_values = null_values.sort_values('percent', ascending=False)
-    print(null_values)
+    #print(null_values)
 
     # Fill missing attributes.
     # Hydraulics
@@ -132,6 +158,9 @@ def main():
     data['YearMade'] = pd.to_datetime(data['YearMade'], format="%Y")
     data['saledate'] = pd.to_datetime(data['saledate'], format="%m/%d/%Y %H:%M")
     data['ageAtSaletime'] = data['saledate'] - data['YearMade']
+    # Convert YearMade back to simple int.
+    data['YearMade'] = pd.DatetimeIndex(data['YearMade']).year
+    # Simply divide by the average number of days/month and days/year. Should be good enough.
     data['ageAtSaletimeInMonths'] = round(data['ageAtSaletime'].dt.days/30.44).astype(int)
     data['ageAtSaletimeInYears'] = round(data['ageAtSaletime'].dt.days/365.25).astype(int)
     #print(data[['SalePrice', 'MachineID', 'ModelID', 'YearMade', 'saledate',
@@ -165,17 +194,58 @@ def main():
     data['Enclosure'].replace('EROPS AC', 'EROPS w AC', inplace=True)
     data['Enclosure'].replace('NO ROPS', 'None or Unspecified', inplace=True)
 
+    # Remove rows where the price is a big statistical outlier for that year.
+    # print(data.groupby(['YearMade', 'SalePrice']).describe())
+    # yearStats = data[data.duplicated(['YearMade'], keep=False)]
+    # yearStats = pd.DataFrame(columns=list(np.unique(data['YearMade'])))
+    # print(data.groupby(['YearMade', 'SalePrice']).sum().reset_index().groupby('YearMade')['SalePrice'].mean())
+    yearStats = data.groupby('YearMade')['SalePrice'].describe()
+    #print(yearStats.loc[1950, 'std'])
+    print(yearStats.index.tolist())
+    #print(yearStats['std'])
+    # for year in yearStats.index.tolist():
+    # year = 1952
+    newData = pd.DataFrame(columns=list(data))
+    newRows = []
+    print(newData)
+    for year in yearStats.index.tolist():
+        #print(year)
+        #print(yearStats.loc[year, 'mean'])
+        #print(yearStats.loc[year, 'std'])
+        newData = newData.append(data[(data['YearMade'] == year) &
+                                      (data['SalePrice'] < (yearStats.loc[year, 'mean'] +
+                                                            2.0*yearStats.loc[year, 'std'])) &
+                                      (data['SalePrice'] > (yearStats.loc[year, 'mean'] -
+                                                            2.0*yearStats.loc[year, 'std']))])
+        #newData.append(newRows)
+        #year = 1952
+        #newData = data[(data['YearMade'] == year) &
+    #               (data['SalePrice'] < (yearStats.loc[year, 'mean'] + 2.0 * yearStats.loc[year, 'std']))]
+    #newData = pd.concat(newRows)
+    print(newData)
+    data = newData.copy()
+    # data = data[(data.SalePrice < yearStats)]
+    # for year in np.unique(data['YearMade']):
+    # for year in yearStats:
+    #    print(yearStats[year])
+    # yearStats[year] = data.loc[(data.YearMade == year), 'SalePrice'].tolist()
+    # print(data.groupby('YearMade').filter(lambda x:  x year).mean())
+    # data.groupby(['YearMade', 'SalePrice']).describe()
+
+    # print(yearStats[1950].mean())
+    # print(yearStats[1950].min())
+    # print(yearStats[1950].max())
     # Check percentage of null values per attribute after cleaning data.
     null_values = data.isnull().sum()
     null_values = pd.DataFrame(null_values, columns=['null'])
     null_percent = round(null_values['null']/len(data)*100, 3)
     null_values['percent'] = null_percent
     null_values = null_values.sort_values('percent', ascending=False)
-    print(null_values)
+    #print(null_values)
 
-    ageSorted = data.sort_values(by='ageAtSaletimeInYears')
-    print(ageSorted[['MachineID', 'SalePrice', 'YearMade', 'saledate',
-                     'ageAtSaletime', 'ageAtSaletimeInMonths', 'ageAtSaletimeInYears']].head(50))
+#    ageSorted = data.sort_values(by='ageAtSaletimeInYears')
+#    print(ageSorted[['MachineID', 'SalePrice', 'YearMade', 'saledate',
+#                     'ageAtSaletime', 'ageAtSaletimeInMonths', 'ageAtSaletimeInYears']].head(50))
 
     #data.info()
     #print(data.head(20))
@@ -234,7 +304,7 @@ def main():
     #filterYear = np.where(data['YearMade'] > 1800)[0]
     #print(filterYear)
     #plt.scatter(data['YearMade'].iloc[filterYear], data['SalePrice'].iloc[filterYear])
-    #plt.scatter(data['YearMade'], data['SalePrice'])
+    plt.scatter(data['YearMade'], data['SalePrice'])
     #plt.scatter(data['Hydraulics'], data['SalePrice'])
     #plt.scatter(data['auctioneerID'], data['SalePrice'])
     #plt.scatter(data['Track_Type'], data['SalePrice'])
@@ -242,7 +312,7 @@ def main():
     #plt.scatter(data['Enclosure'], data['SalePrice'])
     #plt.xlabel("X")
     #plt.ylabel("SalePrice")
-    #plt.show()
+    plt.show()
 
 #    #sns.pairplot(data[['SalePrice', 'MachineID', 'ModelID', 'ageAtSaletimeInYears']], hue='SalePrice')
 #    #sns.pairplot(data[['MachineID', 'ModelID', 'ageAtSaletimeInYears']], hue='ProductGroup')
@@ -250,13 +320,13 @@ def main():
 #    #sns.pairplot(data[['SalePrice', 'ModelID', 'ageAtSaletimeInYears']], hue='ProductGroup')
 #    print(data['ProductGroup'].value_counts())
 #    data.info()
-#    sns.pairplot(data, vars=data[['SalePrice', 'ModelID', 'ageAtSaletimeInYears']], hue='ProductGroup')
-#    #sns.pairplot(data, vars=data[['SalePrice', 'ModelID', 'YearMade', 'ageAtSaletimeInYears']])
+#    #sns.pairplot(data, vars=data[['SalePrice', 'YearMade', 'ageAtSaletimeInYears']], hue='ProductGroup')
+#    sns.pairplot(data, vars=data[['SalePrice', 'ModelID', 'ageAtSaletimeInYears']])
 #    plt.show()
 
 
     # Print cleaned data to new csv file.
-    #data.to_csv('TrainAndValid_clean.csv', index=False)
+    data.to_csv('TrainAndValid_clean.csv', index=False)
 
     #print(len(data))
     #print(np.where(data['YearMade'] > 1950))
