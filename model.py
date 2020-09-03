@@ -119,23 +119,25 @@ if __name__ == '__main__':
     X_test = scale_data(mms, X_test)
 
     # RandomForestRegressor()
-#    reg = RandomForestRegressor(n_estimators=200, verbose=1, random_state=0,
-#                                n_jobs=-1)
+    reg = RandomForestRegressor(n_estimators=200, verbose=1, random_state=0,
+                                n_jobs=-1)
+
 #    reg = RandomForestRegressor(n_estimators=200, verbose=1, random_state=0,
 #                                max_features=5, max_depth=12, min_samples_leaf=1,
 #                                min_samples_split=5,
 #                                n_jobs=-1)
-#    reg.fit(X_train, y_train)
-#    y_pred = reg.predict(X_test)
 
-    # MLPRegressor
-    reg = MLPRegressor(solver='adam', max_iter=300, activation='relu', random_state=8,
-                       learning_rate_init=0.6, alpha=1.5,
-                       hidden_layer_sizes=[4, 2], verbose=1)
-    #learning_rate_init = 0.001, batch_size = X_train.shape[0],
     reg.fit(X_train, y_train)
     y_pred = reg.predict(X_test)
-    print(y_pred)
+
+#    # MLPRegressor
+#    reg = MLPRegressor(solver='adam', max_iter=300, activation='relu', random_state=8,
+#                       learning_rate_init=0.6, alpha=1.5,
+#                       hidden_layer_sizes=[4, 2], verbose=1)
+#    #learning_rate_init = 0.001, batch_size = X_train.shape[0],
+#    reg.fit(X_train, y_train)
+#    y_pred = reg.predict(X_test)
+#    print(y_pred)
 
     # Run a prediction on the training set so we can compare performance on the training vs test data.
     y_pred_train = reg.predict(X_train)
