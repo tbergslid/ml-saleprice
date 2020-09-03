@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import r2_score
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder, MinMaxScaler
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
@@ -63,7 +62,7 @@ def plot_actual_vs_predicted(actual, pred, filename=None):
     plt.ylabel('Predicted')
     plt.title('Actual vs Predicted values')
     plt.grid()
-    #plt.axis([df_pred['Actual'].min(), df_pred['Actual'].max(), df_pred['Actual'].min(), df_pred['Actual'].max()])
+    plt.axis([actual.min(), actual.max(), actual.min(), actual.max()])
     if filename:
         plt.savefig(filename)
     else:
@@ -72,16 +71,17 @@ def plot_actual_vs_predicted(actual, pred, filename=None):
 
 
 if __name__ == '__main__':
-    # The input data here must already be prepared.
+    # The input data here must already be cleaned and sanitized.
     data = pd.read_csv('TrainAndValid_clean.csv')
     print(data.head(10))
 
     # List of categorical features.
     features_cat = ['ageAtSaletime', 'YearMade', 'saledate', 'fiModelDesc', 'fiProductClassDesc', 'state',
                     'Enclosure', 'ProductGroup', 'Hydraulics', 'Track_Type', 'auctioneerID', 'UsageBand',
-                    'MachineHoursCurrentMeter']
+                    'MachineHoursCurrentMeter', 'ProductSize', 'MachineID',
+                    'Drive_System', 'Transmission']
     # List of continuous features that don't need encoding.
-    features_cont = ['ModelID', 'MachineID', 'ageAtSaletimeInMonths', 'ageAtSaletimeInYears']
+    features_cont = ['ModelID', 'ageAtSaletimeInMonths', 'ageAtSaletimeInYears']
     # List of labels.
     label_list = 'SalePrice'
     # Encode the categorical features using LabelEncoder().
@@ -97,8 +97,9 @@ if __name__ == '__main__':
 
     # Remove features that have been found to not contribute significantly to the model,
     # or that are redundant due to other features. Determined by trial and error and feature importance metrics.
-    droppable_list = ['Track_Type', 'Hydraulics', 'auctioneerID', 'state', 'MachineID', 'MachineHoursCurrentMeter',
-                      'UsageBand', 'ageAtSaletime', 'ageAtSaletimeInMonths', 'ageAtSaletimeInYears']
+    droppable_list = ['Hydraulics', 'auctioneerID', 'state', 'Track_Type', 'MachineHoursCurrentMeter',
+                      'UsageBand', 'ageAtSaletime', 'ageAtSaletimeInMonths', 'ageAtSaletimeInYears',
+                      'Transmission', 'Drive_System', 'MachineID']
     data_input = data_input.drop(droppable_list, axis=1)
 
     # Save labels to a separate vector and drop from our feature matrix.
@@ -117,7 +118,7 @@ if __name__ == '__main__':
     X_test = scale_data(mms, X_test)
 
     # RandomForestRegressor()
-    reg = RandomForestRegressor(n_estimators=20, verbose=1, random_state=0,
+    reg = RandomForestRegressor(n_estimators=200, verbose=1, random_state=0,
                                 n_jobs=-1)
 #    reg = RandomForestRegressor(n_estimators=200, verbose=1, random_state=0,
 #                                max_features=5, max_depth=12, min_samples_leaf=1,
@@ -152,7 +153,7 @@ if __name__ == '__main__':
 
     # Plot actual vs predicted values.
     plot_actual_vs_predicted(y_test, y_pred)
-    #plot_actual_vs_predicted(y_train, y_pred_train)
+    plot_actual_vs_predicted(y_train, y_pred_train)
     # Add a filename to save the figure.
     #fig_name = 'actual_vs_predicted_testing.png'
     #plot_actual_vs_predicted(y_test, y_pred, fig_name)

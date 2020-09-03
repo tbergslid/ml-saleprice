@@ -1,59 +1,75 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 pd.set_option('display.max_columns', 15)
 pd.set_option('display.width', 1000)
 
-def main():
+if __name__ == '__main__':
     # Read input data.
     data = pd.read_csv('TrainAndValid.csv')
 
-    # Find number of unique entries per attribute.
-    attrib_uniques = pd.DataFrame(columns=['nuniques'], index=list(data))
-    for column in data:
-        attrib_uniques.loc[column] = data[column].nunique()
-
-    # Drop the categories that have been determined to be of little importance.
-    data = data.drop(columns=['SalesID'])
-    data = data.drop(columns=['Forks'])
+    # Drop the features that have been determined to be of little importance.
+    # The features on separate lines are the features that looked like they might have some impact based
+    # on the number of missing values and unique entries. Easier to swap them back in this way.
     data = data.drop(columns=['datasource'])
+    data = data.drop(columns=['Forks'])
     data = data.drop(columns=['Coupler'])
-    data = data.drop(columns=['fiBaseModel', 'fiSecondaryDesc', 'fiModelSeries',
-                              'fiModelDescriptor', 'ProductSize', 'ProductGroupDesc', 'Drive_System',
-                              'Pad_Type', 'Ride_Control', 'Stick', 'Transmission', 'Turbocharged', 'Blade_Extension',
-                              'Blade_Width', 'Enclosure_Type', 'Engine_Horsepower', 'Pushblock', 'Ripper',
-                              'Scarifier', 'Tip_Control', 'Tire_Size', 'Coupler_System', 'Grouser_Tracks',
-                              'Hydraulics_Flow', 'Undercarriage_Pad_Width', 'Stick_Length', 'Thumb',
-                              'Pattern_Changer', 'Grouser_Type', 'Backhoe_Mounting', 'Blade_Type', 'Travel_Controls',
-                              'Differential_Type', 'Steering_Controls'], axis=1)
+    data = data.drop(columns=['Grouser_Type'])
+    data = data.drop(columns=['Blade_Type'])
+    data = data.drop(columns=['Blade_Width'])
+    data = data.drop(columns=['Scarifier'])
+    data = data.drop(columns=['Steering_Controls'])
+    data = data.drop(columns=['Travel_Controls'])
+    data = data.drop(columns=['Thumb'])
+    data = data.drop(columns=['Ride_Control'])
+    data = data.drop(columns=['Differential_Type'])
+    data = data.drop(columns=['SalesID', 'fiBaseModel', 'fiSecondaryDesc', 'fiModelSeries',
+                              'fiModelDescriptor', 'ProductGroupDesc',
+                              'Pad_Type', 'Stick', 'Turbocharged', 'Blade_Extension',
+                              'Enclosure_Type', 'Engine_Horsepower', 'Pushblock', 'Ripper',
+                              'Tip_Control', 'Tire_Size', 'Coupler_System', 'Grouser_Tracks',
+                              'Hydraulics_Flow', 'Undercarriage_Pad_Width', 'Stick_Length',
+                              'Pattern_Changer', 'Backhoe_Mounting',
+                              ], axis=1)
 
     # Drop sales of "antique models" which may skew the price higher as collectibles.
     # This statement also drops rows where the YearMade does not make sense (is 1000).
-    data = data[(data.YearMade >= 1955)]
+    data = data[(data.YearMade >= 1959)]
+    #data = data[(data.YearMade <= 2008)]
 
-    ## We remove all machines made before 1955, so giving the invalid year machines the YearMade of 1940
-    ## instead should not collide with any other machines. 1000 doesn't work in the datetime methods.
+    # Alternative method of dealing with all the machines with YearMade == 1000:
+    ## We remove all machines made before 1960, so giving the invalid year machines the YearMade of 1940
+    ## instead should not collide with any other machines. 1000 doesn't work in the datetime methods
+    ## and this will also shorten the range between min and max values.
     #data = data[(data.YearMade >= 1960) | (data.YearMade == 1000)]
     #data['YearMade'].replace(1000, 1940, inplace=True)
 
+#    # We have very little data for transactions with SalePrice over 100,000.
+#    # Could be beneficial to drop them?
+#    data = data[(data.SalePrice < 100000)]
+
     # Fill missing attributes.
 
-    # Hydraulics
+    # Fill in missing values for features that we suspect may have an impact.
+    # Use the value already present in the dataset that would make sense, or "Unknown" if not.
     data['Hydraulics'].fillna(value='None or Unspecified', inplace=True)
+    data['ProductSize'].fillna(value='Unknown', inplace=True)
+    data['Drive_System'].fillna(value='Unknown', inplace=True)
+    data['Transmission'].fillna(value='None or Unspecified', inplace=True)
 
-    # auctioneerID
     # ID 1 is by far the most common, therefore we assign the entries without ID to it.
     data['auctioneerID'].fillna(value=1, inplace=True)
 
-    # Track_Type
     # Give the non-tracked machines a Track_Type value of 'None'.
     data.update(data.loc[(data['ProductGroup'] == 'BL'), 'Track_Type'].fillna(value='None'))
     data.update(data.loc[(data['ProductGroup'] == 'WL'), 'Track_Type'].fillna(value='None'))
     data.update(data.loc[(data['ProductGroup'] == 'SSL'), 'Track_Type'].fillna(value='None'))
     data.update(data.loc[(data['ProductGroup'] == 'MG'), 'Track_Type'].fillna(value='None'))
-    # Assume that most TTTs have steel tracks, and the same for the TEX with missing info.
-    data.update(data.loc[(data['ProductGroup'] == 'TTT'), 'Track_Type'].fillna(value='Steel'))
+    # TTTs are mostly missing Track_Type info. Steel is most likely, but let us call it Unknown.
+    data.update(data.loc[(data['ProductGroup'] == 'TTT'), 'Track_Type'].fillna(value='Unknown'))
+    # Steel tracks are most common, so we assign Steel to the few TEX machines with empty Track_Type fields.
     data.update(data.loc[(data['ProductGroup'] == 'TEX'), 'Track_Type'].fillna(value='Steel'))
 
     # Hypothesis: saledate is not very interesting in itself. What is more interesting is the time elapsed
@@ -67,6 +83,11 @@ def main():
     # Simply divide by the average number of days/month and days/year. Should be good enough.
     data['ageAtSaletimeInMonths'] = round(data['ageAtSaletime'].dt.days/30.44).astype(int)
     data['ageAtSaletimeInYears'] = round(data['ageAtSaletime'].dt.days/365.25).astype(int)
+
+    # Check variable correlation
+    #plt.cla()
+    #sns.heatmap(data[['SalePrice', 'YearMade', 'ageAtSaletimeInYears']].corr(), annot=True, cmap=plt.cm.Reds)
+    #plt.show()
 
     # Remove rows with negative age. That is, entries where saledate comes before YearMade.
     # It is likely that the two columns have simply been swapped around, but as it only
@@ -126,6 +147,3 @@ def main():
     # Print cleaned data to new csv file.
     data.to_csv('TrainAndValid_clean.csv', index=False)
 
-
-if __name__ == '__main__':
-    main()
