@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder, MinMaxScaler
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder, MinMaxScaler, StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, RandomizedSearchCV
@@ -14,10 +14,6 @@ pd.set_option('display.width', 1000)
 
 def encode_data(encoder, data, features):
     return data[features].apply(encoder.fit_transform)
-
-
-def scale_data(scaler, X):
-    return scaler.fit_transform(X)
 
 
 def print_metrics(actual, pred):
@@ -93,8 +89,8 @@ if __name__ == '__main__':
 
     # Check correlation between features.
     #corr_list = ['SalePrice', 'YearMade', 'saledate']
-    sns.heatmap(data_input.corr(), annot=True, cmap=plt.cm.Reds)
-    plt.show()
+    #sns.heatmap(data_input.corr(), annot=True, cmap=plt.cm.Reds)
+    #plt.show()
 
     # Remove features that have been found to not contribute significantly to the model,
     # or that are redundant due to other features. Determined by trial and error and feature importance metrics.
@@ -114,9 +110,15 @@ if __name__ == '__main__':
     print(X_test.shape, y_test.shape)
 
     # Scale the feature set to values between 0 and 1 using the MinMaxScaler().
-    mms = MinMaxScaler()
-    X_train = scale_data(mms, X_train)
-    X_test = scale_data(mms, X_test)
+#    mms = MinMaxScaler()
+#    X_train = mms.fit_transform(X_train)
+#    X_test = mms.transform(X_test)
+    # Use StandardScaler() for better performance of MLPRegressor().
+    ss = StandardScaler()
+    # Fit the scaling on the training data.
+    X_train = ss.fit_transform(X_train)
+    # Then transform the test data using the same parameters.
+    X_test = ss.transform(X_test)
 
     # RandomForestRegressor()
     reg = RandomForestRegressor(n_estimators=200, verbose=1, random_state=0,
@@ -131,9 +133,9 @@ if __name__ == '__main__':
     y_pred = reg.predict(X_test)
 
 #    # MLPRegressor
-#    reg = MLPRegressor(solver='adam', max_iter=300, activation='relu', random_state=8,
-#                       learning_rate_init=0.6, alpha=1.5,
-#                       hidden_layer_sizes=[4, 2], verbose=1)
+#    reg = MLPRegressor(solver='adam', max_iter=1000, activation='relu', random_state=8,
+#                       learning_rate_init=0.4, alpha=2.0,
+#                       hidden_layer_sizes=[144, 8], verbose=1)
 #    #learning_rate_init = 0.001, batch_size = X_train.shape[0],
 #    reg.fit(X_train, y_train)
 #    y_pred = reg.predict(X_test)
