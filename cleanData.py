@@ -108,28 +108,6 @@ if __name__ == '__main__':
     data['Enclosure'].replace('EROPS AC', 'EROPS w AC', inplace=True)
     data['Enclosure'].replace('NO ROPS', 'None or Unspecified', inplace=True)
 
-    # Remove rows where the price is a big statistical outlier for machines built that year.
-    yearStats = data.groupby('YearMade')['SalePrice'].describe()
-    newData = pd.DataFrame(columns=list(data))
-    for year in yearStats.index.tolist():
-        newData = newData.append(data[(data['YearMade'] == year) &
-                                      (data['SalePrice'] < (yearStats.loc[year, 'mean'] +
-                                                            2.0*yearStats.loc[year, 'std'])) &
-                                      (data['SalePrice'] > (yearStats.loc[year, 'mean'] -
-                                                            2.0*yearStats.loc[year, 'std']))])
-    data = newData.copy()
-
-#    # Rather than removing outlier prices based on YearMade, look at the ageAtSaletimeInYears.
-#    yearStats = data.groupby('ageAtSaletimeInYears')['SalePrice'].describe()
-#    newData = pd.DataFrame(columns=list(data))
-#    for year in yearStats.index.tolist():
-#        newData = newData.append(data[(data['ageAtSaletimeInYears'] == year) &
-#                                      (data['SalePrice'] < (yearStats.loc[year, 'mean'] +
-#                                                            2.0*yearStats.loc[year, 'std'])) &
-#                                      (data['SalePrice'] > (yearStats.loc[year, 'mean'] -
-#                                                            2.0*yearStats.loc[year, 'std']))])
-#    data = newData.copy()
-
     # Check percentage of null values per attribute after cleaning data.
     null_values = data.isnull().sum()
     null_values = pd.DataFrame(null_values, columns=['null'])
